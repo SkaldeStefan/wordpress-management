@@ -111,7 +111,8 @@ sudo install -m 755 bin/backup.sh      "$PROJECT_DIR/bin/backup.sh"
 sudo install -m 755 bin/backup-once.sh "$PROJECT_DIR/bin/backup-once.sh"
 sudo install -m 755 bin/restore-from-file.sh "$PROJECT_DIR/bin/restore-from-file.sh"
 sudo install -m 755 bin/restore-latest.sh    "$PROJECT_DIR/bin/restore-latest.sh"
-sudo install -m 755 bin/wp-manage.sh         /usr/local/bin/wp-manage
+sudo install -m 755 bin/wp-manage.sh              /usr/local/bin/wp-manage
+sudo install -m 644 bin/wp-manage-completion.bash /etc/bash_completion.d/wp-manage
 
 if [ ! -f /usr/local/bin/wp ]; then
   sudo curl -fsSL \
