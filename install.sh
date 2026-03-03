@@ -9,6 +9,11 @@ if [ ! -f "${SCRIPT_DIR}/docker-compose.yml" ]; then
 fi
 cd "$SCRIPT_DIR"
 
+if [ -f "${SCRIPT_DIR}/.env.local" ]; then
+  # shellcheck source=/dev/null
+  source "${SCRIPT_DIR}/.env.local"
+fi
+
 _pick_project_name() {
   local -a colors=(red green blue yellow orange purple pink cyan magenta lime)
   local -a fruits=(apple mango banana cherry grape lemon peach plum kiwi melon)

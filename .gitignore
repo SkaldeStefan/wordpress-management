@@ -1,6 +1,7 @@
 # Generierte Instanz-Konfigurationen (enthalten Passwörter)
 .env
 .env.*
+!.env.local.example
 
 # Backup-Dateien
 *.tar.gz
