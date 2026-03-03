@@ -1,0 +1,101 @@
+---
+services:
+
+  wordpress:
+    image: wordpress:latest
+    container_name: ${PROJECT_NAME}_wordpress
+    volumes:
+      - ./uploads.ini:/usr/local/etc/php/conf.d/uploads.ini
+      - wp_data:/var/www/html
+      - /usr/local/bin/wp:/usr/local/bin/wp:ro
+    restart: unless-stopped
+    environment:
+      WORDPRESS_DB_HOST: ${PROJECT_NAME}_db
+      WORDPRESS_DB_USER: ${DB_USER}
+      WORDPRESS_DB_PASSWORD: ${DB_PASSWORD}
+      WORDPRESS_DB_NAME: ${DB_DATABASE}
+      WORDPRESS_TABLE_PREFIX: ${WP_TABLE_PREFIX:?WP_TABLE_PREFIX is required}
+      WP_CLI_ALLOW_ROOT: "1"
+    networks:
+      - traefik_network
+      - wp_network
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=${TRAEFIK_NETWORK_NAME}"
+      - "traefik.http.routers.${PROJECT_NAME}.tls=true"
+      - "traefik.http.routers.${PROJECT_NAME}.entrypoints=https"
+      - "traefik.http.routers.${PROJECT_NAME}.rule=Host(`${PROJECT_DOMAIN}`)"
+      - "traefik.http.routers.${PROJECT_NAME}.tls.certresolver=lets_encrypt_resolver"
+      - "traefik.http.routers.${PROJECT_NAME}.middlewares=${TRAEFIK_MIDDLEWARES}"
+
+  db:
+    image: mariadb:11.4
+    container_name: ${PROJECT_NAME}_db
+    volumes:
+      - db_data:/var/lib/mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${DB_DATABASE}
+      MYSQL_USER: ${DB_USER}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+    networks:
+      - wp_network
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  backup:
+    image: mariadb:11.4
+    container_name: ${PROJECT_NAME}_backup
+    entrypoint: ["/bin/sh", "/usr/local/bin/backup.sh"]
+    restart: unless-stopped
+    volumes:
+      - wp_data:/var/www/html:ro
+      - ${BACKUP_DIR}:/backups
+      - ./bin/backup.sh:/usr/local/bin/backup.sh:ro
+    environment:
+      PROJECT_NAME: ${PROJECT_NAME}
+      BACKUP_DIR: /backups
+      BACKUP_MODE: ${BACKUP_MODE:-schedule}
+      WORDPRESS_DB_HOST: ${PROJECT_NAME}_db
+      WORDPRESS_DB_USER: ${DB_USER}
+      WORDPRESS_DB_PASSWORD: ${DB_PASSWORD}
+      WORDPRESS_DB_NAME: ${DB_DATABASE}
+      WORDPRESS_DB_PORT: "3306"
+      BACKUP_RUN_HOUR: ${BACKUP_RUN_HOUR:-2}
+      WP_ROOT: /var/www/html
+      WP_CONTENT_PATH: /var/www/html/wp-content
+    depends_on:
+      db:
+        condition: service_healthy
+      wordpress:
+        condition: service_started
+    networks:
+      - wp_network
+
+volumes:
+  db_data:
+    name: ${PROJECT_NAME}_db_data
+  wp_data:
+    name: ${PROJECT_NAME}_wp_data
+
+networks:
+  traefik_network:
+    name: ${TRAEFIK_NETWORK_NAME}
+    external: true
+  wp_network:
+    name: ${NETWORK_NAME}
+    external: false

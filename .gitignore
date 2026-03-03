@@ -1,0 +1,10 @@
+# Generierte Instanz-Konfigurationen (enthalten Passwörter)
+.env
+.env.*
+
+# Backup-Dateien
+*.tar.gz
+*.sql
+
+# macOS
+.DS_Store
