@@ -13,7 +13,9 @@ Befehle:
   start   <name>          Instanz starten
   stop    <name>          Instanz stoppen
   backup  <name>          Einmal-Backup auslösen
-  restore <name> [datei]  Wiederherstellen (neuestes Backup oder aus Datei)
+  restore <name> [datei] [--clean]
+                          Wiederherstellen (neuestes Backup oder aus Datei);
+                          --clean entfernt vorher Volumes (DB + WordPress) komplett
   exec    <name> <befehl> WP-CLI-Befehl in einer Instanz ausführen
   remove  <name>          Instanz vollständig entfernen (inkl. Volumes und Backups)
 EOF
@@ -92,8 +94,20 @@ cmd_backup() {
 
 cmd_restore() {
   local name="$1"
-  local file="${2:-}"
+  shift
   _require_name "$name"
+
+  local file="" clean=""
+  for arg in "$@"; do
+    case "$arg" in
+      --clean) clean="--clean" ;;
+      -*)
+        echo "Fehler: Unbekannte Option: $arg" >&2
+        exit 1
+        ;;
+      *) file="$arg" ;;
+    esac
+  done
 
   if [ -n "$file" ]; then
     local script="${WP_BASE}/${name}/bin/restore-from-file.sh"
@@ -101,14 +115,14 @@ cmd_restore() {
       echo "Fehler: ${script} nicht gefunden oder nicht ausführbar." >&2
       exit 1
     fi
-    "$script" "$file"
+    "$script" ${clean:+"$clean"} "$file"
   else
     local script="${WP_BASE}/${name}/bin/restore-latest.sh"
     if [ ! -x "$script" ]; then
       echo "Fehler: ${script} nicht gefunden oder nicht ausführbar." >&2
       exit 1
     fi
-    "$script"
+    "$script" ${clean:+"$clean"}
   fi
 }
 
@@ -147,7 +161,7 @@ case "$COMMAND" in
   start)   cmd_start  "${1:-}" ;;
   stop)    cmd_stop   "${1:-}" ;;
   backup)  cmd_backup "${1:-}" ;;
-  restore) cmd_restore "${1:-}" "${2:-}" ;;
+  restore) cmd_restore "${1:-}" "${@:2}" ;;
   exec)    cmd_exec "${1:-}" "${@:2}" ;;
   remove)  cmd_remove "${1:-}" ;;
   *)       _usage ;;

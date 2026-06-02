@@ -5,8 +5,22 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="${PROJECT_DIR:-$(cd -- "${SCRIPT_DIR}/.." && pwd)}"
 ENV_FILE="${PROJECT_DIR}/.env"
 
-if [ $# -ne 1 ]; then
-  echo "Usage: $0 <backup-archive.tar.gz>" >&2
+CLEAN=0
+POSITIONAL=()
+for arg in "$@"; do
+  case "$arg" in
+    --clean) CLEAN=1 ;;
+    -*)
+      echo "Fehler: Unbekannte Option: $arg" >&2
+      echo "Usage: $0 [--clean] <backup-archive.tar.gz>" >&2
+      exit 1
+      ;;
+    *) POSITIONAL+=("$arg") ;;
+  esac
+done
+
+if [ ${#POSITIONAL[@]} -ne 1 ]; then
+  echo "Usage: $0 [--clean] <backup-archive.tar.gz>" >&2
   exit 1
 fi
 
@@ -44,7 +58,7 @@ wait_for_db_ready() {
   return 1
 }
 
-BACKUP_ARG="$1"
+BACKUP_ARG="${POSITIONAL[0]}"
 if [ -f "$BACKUP_ARG" ]; then
   BACKUP_FILE="$(cd -- "$(dirname -- "$BACKUP_ARG")" && pwd)/$(basename -- "$BACKUP_ARG")"
 else
@@ -72,6 +86,26 @@ fi
 
 echo "Restore gestartet aus: $BACKUP_FILE"
 
+if [ "$CLEAN" -eq 1 ]; then
+  echo "Clean-Restore: entferne Container und Volumes..."
+  docker compose --project-directory "$PROJECT_DIR" down --volumes
+
+  echo "Initialisiere frische Instanz (WordPress-Core + leere Datenbank)..."
+  docker compose --project-directory "$PROJECT_DIR" up -d wordpress >/dev/null
+
+  # Warten, bis der Entrypoint den WordPress-Core ins frische Volume kopiert hat
+  retries=60
+  until docker compose --project-directory "$PROJECT_DIR" exec -T wordpress sh -lc \
+    'test -f /var/www/html/wp-includes/version.php' >/dev/null 2>&1; do
+    retries=$((retries - 1))
+    if [ "$retries" -le 0 ]; then
+      echo "Fehler: WordPress-Core wurde nicht initialisiert." >&2
+      exit 1
+    fi
+    sleep 2
+  done
+fi
+
 echo "Stoppe WordPress fuer konsistenten Restore..."
 docker compose --project-directory "$PROJECT_DIR" stop wordpress >/dev/null 2>&1 || true
 
@@ -90,13 +124,13 @@ tar -xOzf "$BACKUP_FILE" --wildcards --no-anchored 'db.sql' \
 if grep -Eq '(^|/)(\./)?wp-content\.tar$' <<<"$ARCHIVE_ENTRIES"; then
   echo "Restore wp-content..."
   tar -xOzf "$BACKUP_FILE" --wildcards --no-anchored 'wp-content.tar' \
-    | docker compose --project-directory "$PROJECT_DIR" run --rm --no-deps -T wpcli sh -lc \
+    | docker compose --project-directory "$PROJECT_DIR" run --rm --no-deps -T wordpress sh -lc \
       'set -e; cd /var/www/html; rm -rf wp-content; tar -xf -'
 else
   echo "Hinweis: wp-content.tar nicht im Archiv, nur DB wurde restored."
 fi
 
-echo "Starte WordPress wieder..."
-docker compose --project-directory "$PROJECT_DIR" up -d wordpress >/dev/null
+echo "Starte Instanz wieder..."
+docker compose --project-directory "$PROJECT_DIR" up -d >/dev/null
 
 echo "Restore abgeschlossen."

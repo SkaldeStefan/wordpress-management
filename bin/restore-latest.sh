@@ -6,6 +6,17 @@ PROJECT_DIR="${PROJECT_DIR:-$(cd -- "${SCRIPT_DIR}/.." && pwd)}"
 ENV_FILE="${PROJECT_DIR}/.env"
 RESTORE_SCRIPT="${SCRIPT_DIR}/restore-from-file.sh"
 
+RESTORE_OPTS=()
+for arg in "$@"; do
+  case "$arg" in
+    --clean) RESTORE_OPTS+=("--clean") ;;
+    *)
+      echo "Usage: $0 [--clean]" >&2
+      exit 1
+      ;;
+  esac
+done
+
 if [ ! -x "$RESTORE_SCRIPT" ]; then
   echo "Fehler: restore-from-file.sh nicht gefunden oder nicht ausfuehrbar: $RESTORE_SCRIPT" >&2
   exit 1
@@ -43,4 +54,4 @@ if [ -z "$LATEST_BACKUP" ]; then
 fi
 
 echo "Nutze neuestes Backup: $LATEST_BACKUP"
-"$RESTORE_SCRIPT" "$LATEST_BACKUP"
+"$RESTORE_SCRIPT" ${RESTORE_OPTS[@]+"${RESTORE_OPTS[@]}"} "$LATEST_BACKUP"

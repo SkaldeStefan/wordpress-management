@@ -32,8 +32,8 @@ _wp_manage_complete() {
     return
   fi
 
-  # Drittes Argument für restore: Backup-Datei aus dem Instanz-Backup-Verzeichnis
-  if [ "$cword" -eq 3 ] && [ "$cmd" = "restore" ]; then
+  # Ab drittem Argument für restore: Backup-Datei und/oder --clean
+  if [ "$cword" -ge 3 ] && [ "$cmd" = "restore" ]; then
     local wp_base="${WP_BASE:-/srv/docker/wordpress}"
     local name="${words[2]}"
     local backup_dir
@@ -43,10 +43,10 @@ _wp_manage_complete() {
       while IFS= read -r f; do
         files+=("$f")
       done < <(ls "${backup_dir}"/*.tar.gz 2>/dev/null | xargs -r -n1 basename 2>/dev/null || true)
-      COMPREPLY=($(compgen -W "${files[*]}" -- "$cur"))
+      COMPREPLY=($(compgen -W "${files[*]} --clean" -- "$cur"))
     else
       compopt -o filenames 2>/dev/null
-      COMPREPLY=($(compgen -f -- "$cur"))
+      COMPREPLY=($(compgen -W "--clean" -f -- "$cur"))
     fi
     return
   fi
