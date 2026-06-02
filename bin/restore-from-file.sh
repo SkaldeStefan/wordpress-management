@@ -57,12 +57,15 @@ if [ ! -f "$BACKUP_FILE" ]; then
   exit 1
 fi
 
-if ! tar -tzf "$BACKUP_FILE" >/dev/null 2>&1; then
+# Listing einmal komplett einlesen: vermeidet SIGPIPE durch grep -q bei
+# pipefail (tar wuerde sonst Exit 141 liefern, obwohl db.sql vorhanden ist)
+# und dekomprimiert das Archiv nur einmal.
+if ! ARCHIVE_ENTRIES="$(tar -tzf "$BACKUP_FILE" 2>/dev/null)"; then
   echo "Fehler: Ungueltiges Backup-Archiv: $BACKUP_FILE" >&2
   exit 1
 fi
 
-if ! tar -tzf "$BACKUP_FILE" | grep -Eq '(^|/)(\./)?db\.sql$'; then
+if ! grep -Eq '(^|/)(\./)?db\.sql$' <<<"$ARCHIVE_ENTRIES"; then
   echo "Fehler: db.sql fehlt im Archiv: $BACKUP_FILE" >&2
   exit 1
 fi
@@ -84,7 +87,7 @@ tar -xOzf "$BACKUP_FILE" --wildcards --no-anchored 'db.sql' \
   | docker compose --project-directory "$PROJECT_DIR" exec -T db sh -lc \
     'mariadb --host=127.0.0.1 --port=3306 --user="$MYSQL_USER" --password="$MYSQL_PASSWORD" "$MYSQL_DATABASE"'
 
-if tar -tzf "$BACKUP_FILE" | grep -Eq '(^|/)(\./)?wp-content\.tar$'; then
+if grep -Eq '(^|/)(\./)?wp-content\.tar$' <<<"$ARCHIVE_ENTRIES"; then
   echo "Restore wp-content..."
   tar -xOzf "$BACKUP_FILE" --wildcards --no-anchored 'wp-content.tar' \
     | docker compose --project-directory "$PROJECT_DIR" run --rm --no-deps -T wpcli sh -lc \
